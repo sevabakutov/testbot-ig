@@ -1,7 +1,7 @@
 use std::env;
 
 use actix_web::{http::{Method, StatusCode}, web, App, HttpRequest, HttpResponse, HttpServer};
-use testbot::models::InstagramMessagesRequest;
+use testbot::models::WebhookPayload;
 
 async fn instagram_webhook(req: HttpRequest, body: web::Bytes) -> HttpResponse {
     let verify_token = env::var("TOKEN").expect("Failed to get TOKEN variable");
@@ -33,7 +33,7 @@ async fn instagram_webhook(req: HttpRequest, body: web::Bytes) -> HttpResponse {
         }
 
         Method::POST => {
-            let json = match serde_json::from_slice::<InstagramMessagesRequest>(&body) {
+            let json = match serde_json::from_slice::<WebhookPayload>(&body) {
                 Ok(v) => v,
                 Err(e) => {
                     println!("⚠️  Bad JSON: {}", e);

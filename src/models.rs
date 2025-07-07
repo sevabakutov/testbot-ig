@@ -50,12 +50,12 @@ pub struct MessagesValue {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct InstagramMessagesRequest {
+pub struct Change {
     field: Field,
     value: MessagesValue
 }
 
-impl Display for InstagramMessagesRequest {
+impl Display for Change {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self.field {
             Field::Messages => write!(
@@ -67,5 +67,50 @@ impl Display for InstagramMessagesRequest {
                 self.value.message
             ),
         }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Entry {
+    id: String,
+    time: u64,
+    changes: Vec<Change>
+}
+
+impl Display for Entry {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        writeln!(f, "• Entry {} @ {}", self.id, self.time)?;
+        for ch in &self.changes {
+            writeln!(f, "    {}", ch)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MetaObject {
+    Instagram
+}
+
+#[derive(Debug, Deserialize)]
+pub struct WebhookPayload {
+    object: MetaObject,
+    entry: Vec<Entry>
+}
+
+impl Display for WebhookPayload {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        writeln!(
+            f,
+            "=== Webhook object: {:?} | {} entr{} ===",
+            self.object,
+            self.entry.len(),
+            if self.entry.len() == 1 { "y" } else { "ies" }
+        )?;
+        for e in &self.entry {
+            writeln!(f, "{}", e)?;
+        }
+        Ok(())
     }
 }
