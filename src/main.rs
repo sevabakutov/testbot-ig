@@ -1,3 +1,5 @@
+use std::env;
+
 use actix_web::{http::StatusCode, web, App, HttpRequest, HttpResponse, HttpServer};
 
 async fn receive_messages(req: HttpRequest) -> HttpResponse {
@@ -7,6 +9,11 @@ async fn receive_messages(req: HttpRequest) -> HttpResponse {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    let port = env::var("PORT")
+        .unwrap_or_else(|_| "3000".to_string())
+        .parse()
+        .expect("PORT must be a number");
+
     HttpServer::new(|| {
         App::new()
             .service(
@@ -14,7 +21,7 @@ async fn main() -> std::io::Result<()> {
                     .route("/receive_messages", web::post().to(receive_messages))
             )
     })
-    .bind(("127.0.0.1", 8080))?
+    .bind(("127.0.0.1", port))?
     .run()
     .await
 }
