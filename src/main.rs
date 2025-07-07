@@ -1,8 +1,9 @@
 use std::env;
 
 use actix_web::{http::{Method, StatusCode}, web, App, HttpRequest, HttpResponse, HttpServer};
+use serde_json::Value;
 
-async fn instagram_webhook(req: HttpRequest, _body: web::Bytes) -> HttpResponse {
+async fn instagram_webhook(req: HttpRequest, body: web::Bytes) -> HttpResponse {
     let verify_token = env::var("TOKEN").expect("Failed to get TOKEN variable");
 
     match *req.method() {
@@ -31,19 +32,19 @@ async fn instagram_webhook(req: HttpRequest, _body: web::Bytes) -> HttpResponse 
             }
         }
 
-        // Method::POST => {
-        //     let json: Value = match serde_json::from_slice(&body) {
-        //         Ok(v) => v,
-        //         Err(e) => {
-        //             println!("⚠️  Bad JSON: {}", e);
-        //             return HttpResponse::BadRequest().finish();
-        //         }
-        //     };
+        Method::POST => {
+            let json: Value = match serde_json::from_slice(&body) {
+                Ok(v) => v,
+                Err(e) => {
+                    println!("⚠️  Bad JSON: {}", e);
+                    return HttpResponse::BadRequest().finish();
+                }
+            };
 
-        //     println!("📨 New Instagram event: {:#}", json);
+            println!("📨 New Instagram event: {:#}", json);
 
-        //     HttpResponse::Ok().finish()
-        // }
+            HttpResponse::Ok().finish()
+        }
 
         _ => HttpResponse::MethodNotAllowed().finish(),
     }
