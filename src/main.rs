@@ -1,56 +1,6 @@
 use std::env;
-
-use actix_web::{http::{Method, StatusCode}, web, App, HttpRequest, HttpResponse, HttpServer};
-use testbot::models::WebhookPayload;
-
-async fn instagram_webhook(req: HttpRequest, body: web::Bytes) -> HttpResponse {
-    let verify_token = env::var("TOKEN").expect("Failed to get TOKEN variable");
-
-    match *req.method() {
-        Method::GET => {
-            let qs = req.query_string();
-
-            let mut mode = String::new();
-            let mut token = String::new();
-            let mut challenge = String::new();
-
-            for (key, value) in url::form_urlencoded::parse(qs.as_bytes()) {
-                match key.as_ref() {
-                    "hub.mode"         => mode      = value.into_owned(),
-                    "hub.verify_token" => token     = value.into_owned(),
-                    "hub.challenge"    => challenge = value.into_owned(),
-                    _ => {}
-                }
-            }
-
-            if mode == "subscribe" && token == verify_token {
-                println!("✅ Instagram webhook verified");
-                HttpResponse::Ok().body(challenge)
-            } else {
-                println!("❌ Verification failed: token mismatch");
-                HttpResponse::build(StatusCode::FORBIDDEN).finish()
-            }
-        }
-
-        Method::POST => {
-            let json = match serde_json::from_slice::<WebhookPayload>(&body) {
-                Ok(v) => v,
-                Err(e) => {
-                    println!("⚠️  Bad JSON: {}", e);
-                    return HttpResponse::BadRequest().finish();
-                }
-            };
-
-            println!("📨 New Instagram event: {:#}", json);
-
-            HttpResponse::Ok().finish()
-        }
-
-        _ => HttpResponse::MethodNotAllowed().finish(),
-    }
-}
-
-
+use actix_web::{web, App, HttpServer};
+use testbot::handlers::instagram_webhook;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
