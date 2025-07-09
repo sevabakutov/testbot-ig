@@ -45,7 +45,7 @@ impl Display for Message {
 pub struct MessagesValue {
     sender: Sender,
     recipient: Recipient,
-    timestamp: String,
+    timestamp: u64,
     message: Message
 }
 
