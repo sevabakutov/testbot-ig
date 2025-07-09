@@ -1,10 +1,7 @@
 use std::{fmt::{self, Display, Formatter}};
 use serde::{Deserialize, Serialize};
-use once_cell::sync::Lazy;
 
-static IG_USER_ID: Lazy<String> = Lazy::new(|| {
-    std::env::var("IG_USER_ID").expect("Set IG_USER_ID env-var")
-});
+use crate::constants::IG_USER_ID;
 
 #[derive(Debug, Deserialize)]
 pub enum Field {

@@ -1,16 +1,7 @@
-use std::env;
-
 use actix_web::{HttpRequest, HttpResponse};
+use crate::constants::{APP_SECRET, VERIFY_TOKEN};
 
 pub fn verify_challenge(req: &HttpRequest) -> HttpResponse {
-    let verify_token = match env::var("TOKEN") {
-        Ok(token) => token,
-        Err(_) => {
-            eprintln!("❌ TOKEN env var missing");
-            return HttpResponse::InternalServerError().finish();
-        }
-    };
-
     let qs = req.query_string();
 
     let mut mode = None;
@@ -26,7 +17,7 @@ pub fn verify_challenge(req: &HttpRequest) -> HttpResponse {
         }
     }
 
-    if mode.as_deref() == Some("subscribe") && token.as_deref() == Some(&verify_token) {
+    if mode.as_deref() == Some("subscribe") && token.as_deref() == Some(&VERIFY_TOKEN) {
         println!("✅ Webhook verified");
         HttpResponse::Ok().body(challenge.unwrap_or_default())
     } else {
@@ -40,11 +31,6 @@ pub fn verify_signature(req: &HttpRequest, body: &[u8]) -> Result<(), HttpRespon
     use sha2::Sha256;
 
     type HmacSha256 = Hmac<Sha256>;
-
-    let app_secret = env::var("APP_SECRET").map_err(|_| {
-        eprintln!("❌ APP_SECRET not set");
-        HttpResponse::InternalServerError().finish()
-    })?;
 
     let signature_header = req
         .headers()
@@ -61,7 +47,7 @@ pub fn verify_signature(req: &HttpRequest, body: &[u8]) -> Result<(), HttpRespon
         HttpResponse::Unauthorized().finish()
     })?;
 
-    let mut mac = HmacSha256::new_from_slice(app_secret.as_bytes()).map_err(|_| {
+    let mut mac = HmacSha256::new_from_slice(APP_SECRET.as_bytes()).map_err(|_| {
         eprintln!("❌ HMAC key");
         HttpResponse::Unauthorized().finish()
     })?;
