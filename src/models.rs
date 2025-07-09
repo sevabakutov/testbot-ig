@@ -1,5 +1,5 @@
 use std::fmt::{self, Display, Formatter};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
 pub enum Field {
@@ -18,7 +18,7 @@ impl Display for Sender {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Recipient {
     id: String
 }
@@ -29,7 +29,7 @@ impl Display for Recipient {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Message {
     mid: String,
     text: String
@@ -113,4 +113,10 @@ impl Display for WebhookPayload {
         }
         Ok(())
     }
+}
+
+#[derive(Debug, Serialize)]
+pub struct SendBody {
+    recipient: Recipient,
+    message:   Message,
 }

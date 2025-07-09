@@ -12,6 +12,7 @@ pub async fn instagram_webhook(req: HttpRequest, body: web::Bytes) -> HttpRespon
             let json = match serde_json::from_slice::<WebhookPayload>(&body) {
                 Ok(v) => v,
                 Err(e) => {
+                    println!("JSON: {:?}", body);
                     println!("⚠️  Bad JSON: {}", e);
                     return HttpResponse::BadRequest().finish();
                 }
