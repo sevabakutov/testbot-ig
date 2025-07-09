@@ -49,6 +49,19 @@ pub struct MessagesValue {
     message: Message
 }
 
+impl Display for MessagesValue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "[IG] {} → {} @ {} : {}",
+            self.sender,
+            self.recipient,
+            self.timestamp,
+            self.message
+        )
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct Change {
     field: Field,
@@ -74,13 +87,14 @@ impl Display for Change {
 pub struct Entry {
     id: String,
     time: u64,
-    changes: Vec<Change>
+    // changes: Vec<Change>
+    messaging: Vec<MessagesValue>
 }
 
 impl Display for Entry {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         writeln!(f, "• Entry {} @ {}", self.id, self.time)?;
-        for ch in &self.changes {
+        for ch in &self.messaging {
             writeln!(f, "    {}", ch)?;
         }
         Ok(())
