@@ -1,5 +1,10 @@
-use std::{env, fmt::{self, Display, Formatter}};
+use std::{fmt::{self, Display, Formatter}};
 use serde::{Deserialize, Serialize};
+use once_cell::sync::Lazy;
+
+static IG_USER_ID: Lazy<String> = Lazy::new(|| {
+    std::env::var("IG_USER_ID").expect("Set IG_USER_ID env-var")
+});
 
 #[derive(Debug, Deserialize)]
 pub enum Field {
@@ -15,11 +20,6 @@ pub struct Sender {
 impl Sender {
     pub fn as_recipient(&self) -> Recipient {
         Recipient::new(self.id.as_str())
-    }
-
-    pub fn is_me(&self) -> bool {
-        let me = env::var("IG_USER_ID").expect("Failed to read IG_USER_ID");
-        self.id.eq(&me)
     }
 }
 
@@ -54,6 +54,12 @@ pub struct IncomingMessage {
     text: String
 }
 
+impl IncomingMessage {
+    pub fn from_bot(&self, ig_user_id: &str, sender_id: &str) -> bool {
+        sender_id.eq(ig_user_id)
+    }
+}
+
 impl Display for IncomingMessage {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "\"{}\" (mid: {})", self.text, self.mid)
@@ -81,32 +87,10 @@ impl Display for MessagesValue {
     }
 }
 
-// #[derive(Debug, Deserialize)]
-// pub struct Change {
-//     field: Field,
-//     value: MessagesValue
-// }
-
-// impl Display for Change {
-//     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-//         match self.field {
-//             Field::Messages => write!(
-//                 f,
-//                 "[IG] {} → {} @ {} : {}",
-//                 self.value.sender,
-//                 self.value.recipient,
-//                 self.value.timestamp,
-//                 self.value.message
-//             ),
-//         }
-//     }
-// }
-
 #[derive(Debug, Deserialize, Clone)]
 pub struct Entry {
     id: String,
     time: u64,
-    // changes: Vec<Change>
     messaging: Vec<MessagesValue>
 }
 
@@ -133,12 +117,18 @@ pub struct WebhookPayload {
 }
 
 impl WebhookPayload {
-    pub fn primary_sender(&self) -> Option<&Sender> {
-        self.entry.iter().flat_map(|e| &e.messaging).map(|m| &m.sender).next()
+    fn first_msg(&self) -> Option<&MessagesValue> {
+        self.entry.iter().flat_map(|e| &e.messaging).next()
     }
 
-    pub fn is_echo(&self) -> bool {
-        self.entry.iter().flat_map(|e| &e.messaging).map(|m| &m.sender).next().unwrap().is_me()
+    pub fn primary_sender(&self) -> Option<&Sender> {
+        self.first_msg().map(|m| &m.sender)
+    }
+
+    pub fn is_bot_echo(&self) -> bool {
+        self.first_msg()
+            .map(|m| m.message.from_bot(&IG_USER_ID, &m.sender.id))
+            .unwrap_or(false)
     }
 }
 

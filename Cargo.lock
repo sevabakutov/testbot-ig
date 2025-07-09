@@ -1653,6 +1653,7 @@ dependencies = [
  "anyhow",
  "hex",
  "hmac",
+ "once_cell",
  "reqwest",
  "serde",
  "serde_json",

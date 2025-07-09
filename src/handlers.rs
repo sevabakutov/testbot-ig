@@ -19,10 +19,10 @@ pub async fn instagram_dm_webhook(req: HttpRequest, body: web::Bytes) -> HttpRes
             };
             println!("📨 {payload:#}");
 
-            if payload.is_echo() {
-                return HttpResponse::Continue().finish();
+            if payload.is_bot_echo() {
+                return HttpResponse::Ok().finish();
             }
-            
+
             let recipient = match payload.primary_sender() {
                 Some(s) => s.as_recipient(),
                 None => return HttpResponse::BadRequest().finish(),
