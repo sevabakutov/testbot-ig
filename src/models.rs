@@ -1,4 +1,4 @@
-use std::fmt::{self, Display, Formatter};
+use std::{env, fmt::{self, Display, Formatter}};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
@@ -15,6 +15,11 @@ pub struct Sender {
 impl Sender {
     pub fn as_recipient(&self) -> Recipient {
         Recipient::new(self.id.as_str())
+    }
+
+    pub fn is_me(&self) -> bool {
+        let me = env::var("IG_USER_ID").expect("Failed to read IG_USER_ID");
+        self.id.eq(&me)
     }
 }
 
@@ -130,6 +135,10 @@ pub struct WebhookPayload {
 impl WebhookPayload {
     pub fn primary_sender(&self) -> Option<&Sender> {
         self.entry.iter().flat_map(|e| &e.messaging).map(|m| &m.sender).next()
+    }
+
+    pub fn is_echo(&self) -> bool {
+        self.entry.iter().flat_map(|e| &e.messaging).map(|m| &m.sender).next().unwrap().is_me()
     }
 }
 
