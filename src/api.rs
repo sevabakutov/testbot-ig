@@ -1,27 +1,28 @@
-// use std::env;
+use actix_web::{
+    error::{ErrorBadRequest, ErrorInternalServerError},
+    Result,
+};
+use reqwest::Client;
+use std::env;
 
-// use actix_web::Result;
+use crate::models::{OutgoingMessage, Recipient, SendBody};
 
-// use crate::models::{Message, Sender};
+pub async fn send_dm<'a>(recipient: Recipient, message: OutgoingMessage<'a>) -> Result<()> {
+    let token = env::var("ACCESS_TOKEN")
+        .map_err(|_| ErrorBadRequest("ACCESS_TOKEN env-var is missing"))?;
 
-// pub async fn send_message(sender: Sender, message: Message) -> Result<()> {
-//     let ig_user_id = env::var("IG_USER_ID")?;
-//     let token      = env::var("IG_PAGE_TOKEN")?;   // Page Access Token
+    let url  = "https://graph.instagram.com/v21.0/me/messages";
+    let body = SendBody::new(recipient, message);
 
-//     let url = format!(
-//         "https://graph.facebook.com/v23.0/{ig_user_id}/messages"
-//     );
+    Client::new()
+        .post(url)
+        .query(&[("access_token", token)])
+        .json(&body)
+        .send()
+        .await
+        .map_err(ErrorInternalServerError)?
+        .error_for_status()
+        .map_err(ErrorInternalServerError)?;
 
-//     let body = SendBody {
-//         recipient: Recipient { id: sender_id },
-//         message:   Message   { text: GREETING },
-//     };
-
-//     http.post(url)
-//         .query(&[("access_token", token)])
-//         .json(&body)
-//         .send()
-//         .await?
-//         .error_for_status()?;                       // выбросит, если HTTP != 2xx
-//     Ok(())
-// }
+    Ok(())
+}

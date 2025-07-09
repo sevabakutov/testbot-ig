@@ -1,26 +1,38 @@
 use actix_web::{http::Method, web, HttpRequest, HttpResponse};
-use crate::{models::WebhookPayload, utils::{verify_challenge, verify_signature}};
+use crate::{api::send_dm, models::{OutgoingMessage, WebhookPayload}, utils::{verify_challenge, verify_signature}};
 
-pub async fn instagram_webhook(req: HttpRequest, body: web::Bytes) -> HttpResponse {
+pub async fn instagram_dm_webhook(req: HttpRequest, body: web::Bytes) -> HttpResponse {
     match *req.method() {
-        Method::GET => verify_challenge(&req),
+        Method::GET  => verify_challenge(&req),
+
         Method::POST => {
             if let Err(resp) = verify_signature(&req, &body) {
                 return resp;
             }
 
-            let json = match serde_json::from_slice::<WebhookPayload>(&body) {
-                Ok(v) => v,
+            let payload: WebhookPayload = match serde_json::from_slice(&body) {
+                Ok(v)  => v,
                 Err(e) => {
-                    println!("JSON: {:?}", body);
-                    println!("⚠️  Bad JSON: {}", e);
+                    eprintln!("⚠️  Bad JSON: {e}\nPayload: {body:?}");
                     return HttpResponse::BadRequest().finish();
                 }
             };
+            println!("📨 {payload:#}");
 
-            println!("📨 New Instagram event: {:#}", json);
+            let recipient = match payload.primary_sender() {
+                Some(s) => s.as_recipient(),
+                None => return HttpResponse::BadRequest().finish(),
+            };
 
-            HttpResponse::Ok().finish()
+            let message = OutgoingMessage::from("Welcome! (constant response)");
+
+            match send_dm(recipient, message).await {
+                Ok(_) => HttpResponse::Ok().finish(),
+                Err(e) => {
+                    eprintln!("{e}");
+                    HttpResponse::InternalServerError().finish()
+                }
+            }
         }
 
         _ => HttpResponse::MethodNotAllowed().finish(),

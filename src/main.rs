@@ -1,6 +1,6 @@
 use std::env;
 use actix_web::{web, App, HttpServer};
-use testbot::handlers::instagram_webhook;
+use testbot::handlers::instagram_dm_webhook;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -13,7 +13,7 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .service(
                 web::scope("/app")
-                    .route("/instagram", web::to(instagram_webhook))
+                    .route("/instagram", web::to(instagram_dm_webhook))
             )
     })
     .bind(("0.0.0.0", port))?
