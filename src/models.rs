@@ -127,6 +127,12 @@ impl WebhookPayload {
             .map(|m| m.message.from_bot(&IG_USER_ID, &m.sender.id))
             .unwrap_or(false)
     }
+
+    pub fn ready_to_escalate(&self) -> bool {
+        self.first_msg()
+            .map(|m| m.message.text.eq(&"human agent".to_string()))
+            .unwrap_or(false)
+    }
 }
 
 impl Display for WebhookPayload {

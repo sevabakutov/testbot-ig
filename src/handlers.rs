@@ -1,5 +1,5 @@
 use actix_web::{http::Method, web, HttpRequest, HttpResponse};
-use crate::{api::send_dm, models::{OutgoingMessage, WebhookPayload}, utils::{verify_challenge, verify_signature}};
+use crate::{api::{escalate, send_dm}, models::{OutgoingMessage, WebhookPayload}, utils::{verify_challenge, verify_signature}};
 
 pub async fn instagram_dm_webhook(req: HttpRequest, body: web::Bytes) -> HttpResponse {
     match *req.method() {
@@ -27,6 +27,16 @@ pub async fn instagram_dm_webhook(req: HttpRequest, body: web::Bytes) -> HttpRes
                 Some(s) => s.as_recipient(),
                 None => return HttpResponse::BadRequest().finish(),
             };
+
+            if payload.ready_to_escalate() {
+                match escalate(recipient).await {
+                    Ok(_) => return HttpResponse::Ok().finish(),
+                    Err(err) => {
+                        eprintln!("{err}");
+                        return HttpResponse::BadRequest().finish();
+                    }
+                }
+            }
 
             let message = OutgoingMessage::from("Welcome! (constant response)");
 

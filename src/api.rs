@@ -21,3 +21,20 @@ pub async fn send_dm<'a>(recipient: Recipient, message: OutgoingMessage<'a>) -> 
 
     Ok(())
 }
+
+pub async fn escalate(recipient: Recipient) -> Result<()> {
+    let message = OutgoingMessage::from("😊");
+    let body = SendBody::new(recipient, message);
+
+    Client::new()
+        .post(DM_URL)
+        .query(&[("access_token", ACCESS_TOKEN.as_str())])
+        .json(&body)
+        .send()
+        .await
+        .map_err(ErrorInternalServerError)?
+        .error_for_status()
+        .map_err(ErrorInternalServerError)?;
+
+    Ok(())
+}
