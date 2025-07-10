@@ -1,6 +1,17 @@
 use actix_web::{error::ErrorInternalServerError, Result};
-use async_openai::{config::OpenAIConfig, types::{ChatCompletionRequestDeveloperMessage, ChatCompletionRequestDeveloperMessageContent, ChatCompletionRequestMessage, ChatCompletionRequestSystemMessage, ChatCompletionRequestSystemMessageContent, ChatCompletionRequestUserMessage, ChatCompletionRequestUserMessageContent, CreateChatCompletionRequestArgs, CreateChatCompletionResponse}, Client};
-use crate::{constants::OPENAI_PROJECT_ID, models::{Model, OutgoingMessage}};
+use async_openai::{
+    config::OpenAIConfig, 
+    types::{
+        ChatCompletionRequestDeveloperMessage, ChatCompletionRequestDeveloperMessageContent, ChatCompletionRequestMessage, 
+        ChatCompletionRequestSystemMessage, ChatCompletionRequestSystemMessageContent, ChatCompletionRequestUserMessage, 
+        ChatCompletionRequestUserMessageContent, CreateChatCompletionRequestArgs
+    }, 
+    Client
+};
+use crate::{
+    constants::OPENAI_PROJECT_ID, 
+    models::{Model, OutgoingMessage}
+};
 
 pub struct OpenAIClient {
     client: Client<OpenAIConfig>,
