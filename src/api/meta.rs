@@ -9,15 +9,22 @@ use crate::{constants::{ACCESS_TOKEN, DM_URL}, models::{OutgoingMessage, Recipie
 pub async fn send_dm<'a>(recipient: Recipient, message: OutgoingMessage<'a>) -> Result<()> {
     let body = SendBody::new(recipient, message);
 
-    Client::new()
+    let resp = Client::new()
         .post(DM_URL)
         .query(&[("access_token", ACCESS_TOKEN.as_str())])
         .json(&body)
         .send()
         .await
-        .map_err(ErrorInternalServerError)?
-        .error_for_status()
         .map_err(ErrorInternalServerError)?;
+
+    // <<< debug-блок
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let text   = resp.text().await.unwrap_or_default();
+        eprintln!("❗ send_dm failed: {status} — {text}");
+        return Err(ErrorInternalServerError(text));
+    }
+    // >>>
 
     Ok(())
 }
