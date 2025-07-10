@@ -85,6 +85,7 @@ pub async fn instagram_dm_webhook(req: HttpRequest, body: web::Bytes) -> HttpRes
                 return HttpResponse::Ok().finish();
             }
 
+            println!("🤖 OpenAI reply: {reply}");
             if let Err(e) = send_dm(recipient.clone(), OutgoingMessage::from(reply.as_str())).await {
                 eprintln!("{e}");
                 return HttpResponse::InternalServerError().finish();
