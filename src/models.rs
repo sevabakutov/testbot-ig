@@ -1,76 +1,58 @@
-use std::{fmt::{self, Display, Formatter}};
+use std::fmt::{self, Display, Formatter};
+
 use serde::{Deserialize, Serialize};
+
 use crate::constants::IG_USER_ID;
 
-#[derive(Debug, Deserialize)]
-pub enum Field {
-    #[serde(rename = "messages")]
-    Messages
-}
+/* ---------- Core wrappers ---------- */
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Sender {
-    id: String
+    id: String,
 }
 
 impl Sender {
-    pub fn new(id: &str) -> Self {
-        Self {
-            id: id.to_string()
-        }
-    }
+    pub fn id(&self) -> &str { &self.id }
 
-    pub fn as_recipient(&self) -> Recipient {
-        Recipient::new(self.id())
-    }
+    pub fn as_recipient(&self) -> Recipient { Recipient::new(self.id()) }
 
-    pub fn id(&self) -> &str {
-        &self.id
-    }
+    pub fn new(id: &str) -> Self { Self { id: id.into() } }
 }
 
 impl Display for Sender {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.id())
-    }
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result { write!(f, "{}", self.id()) }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Recipient {
-    id: String
+    id: String,
 }
 
 impl Recipient {
-    pub fn new(id: &str) -> Self {
-        Self {
-            id: id.to_string()
-        }
-    }
+    pub fn id(&self) -> &str { &self.id }
 
-    pub fn as_sender(&self) -> Sender {
-        Sender::new(self.id())
-    }
+    pub fn new(id: &str) -> Self { Self { id: id.into() } }
 
-    pub fn id(&self) -> &str {
-        &self.id
-    }
+    pub fn as_sender(&self) -> Sender { Sender::new(self.id()) }
 }
 
 impl Display for Recipient {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.id())
-    }
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result { write!(f, "{}", self.id()) }
 }
+
+/* ---------- Message payloads ---------- */
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct IncomingMessage {
-    mid: String,
-    text: String
+    mid:  String,
+    text: String,
 }
 
 impl IncomingMessage {
+    pub fn text(&self) -> &str { &self.text }
+
     pub fn from_bot(&self, ig_user_id: &str, sender_id: &str) -> bool {
-        sender_id.eq(ig_user_id)
+        sender_id == ig_user_id
     }
 }
 
@@ -80,12 +62,20 @@ impl Display for IncomingMessage {
     }
 }
 
+/* ---------- Webhook hierarchy ---------- */
+
 #[derive(Debug, Deserialize, Clone)]
 pub struct MessagesValue {
-    sender: Sender,
+    sender:    Sender,
     recipient: Recipient,
     timestamp: u64,
-    message: IncomingMessage
+    message:   IncomingMessage,
+}
+
+impl MessagesValue {
+    pub fn sender(&self) -> &Sender              { &self.sender }
+    pub fn recipient(&self) -> &Recipient        { &self.recipient }
+    pub fn message(&self) -> &IncomingMessage    { &self.message }
 }
 
 impl Display for MessagesValue {
@@ -103,9 +93,9 @@ impl Display for MessagesValue {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Entry {
-    id: String,
-    time: u64,
-    messaging: Vec<MessagesValue>
+    id:        String,
+    time:      u64,
+    messaging: Vec<MessagesValue>,
 }
 
 impl Display for Entry {
@@ -121,34 +111,53 @@ impl Display for Entry {
 #[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum MetaObject {
-    Instagram
+    Instagram,
 }
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct WebhookPayload {
     object: MetaObject,
-    entry: Vec<Entry>
+    entry:  Vec<Entry>,
 }
 
+/* ---------- Helpers used в хэндлере ---------- */
+
 impl WebhookPayload {
+    /// Первая `messaging`-запись во всём payload
     fn first_msg(&self) -> Option<&MessagesValue> {
         self.entry.iter().flat_map(|e| &e.messaging).next()
     }
 
-    pub fn primary_sender(&self) -> Option<&Sender> {
-        self.first_msg().map(|m| &m.sender)
+    /// ID пользователя, приславшего сообщение (primary sender)
+    pub fn sender(&self) -> Option<&Sender> {
+        self.first_msg().map(|m| m.sender())
     }
 
+    /// Текст входящего сообщения
+    pub fn text(&self) -> Option<&str> {
+        self.first_msg().map(|m| m.message().text())
+    }
+
+    /// Проверка, что событие — echo от нашего же бота
     pub fn is_bot_echo(&self) -> bool {
         self.first_msg()
-            .map(|m| m.message.from_bot(&IG_USER_ID, &m.sender.id))
+            .map(|m| m.message().from_bot(IG_USER_ID.as_str(), m.sender().id()))
             .unwrap_or(false)
     }
 
-    pub fn ready_to_escalate(&self) -> bool {
-        self.first_msg()
-            .map(|m| m.message.text.eq(&"human agent".to_string()))
-            .unwrap_or(false)
+    /// Клиент попросил человека
+    pub fn wants_human(&self) -> bool {
+        self.text().map(|t| t.trim() == "human agent").unwrap_or(false)
+    }
+
+    /// Чат-идентификатор: используем ID отправителя
+    pub fn chat_id(&self) -> Option<&str> {
+        self.sender().map(|s| s.id())
+    }
+
+    /// Recipient бизнес-аккаунта
+    pub fn recipient(&self) -> Option<&Recipient> {
+        self.first_msg().map(|m| m.recipient())
     }
 }
 
@@ -168,25 +177,46 @@ impl Display for WebhookPayload {
     }
 }
 
+/* ---------- Outgoing wrappers ---------- */
+
 #[derive(Debug, Serialize)]
 pub struct OutgoingMessage<'a> {
     text: &'a str,
 }
 
+impl OutgoingMessage<'_> {
+    pub fn text(&self) -> &str { self.text }
+}
+
 impl<'a> From<&'a str> for OutgoingMessage<'a> {
-    fn from(s: &'a str) -> Self {
-        Self { text: s }
-    }
+    fn from(s: &'a str) -> Self { Self { text: s } }
 }
 
 #[derive(Debug, Serialize)]
 pub struct SendBody<'a> {
     recipient: Recipient,
-    message  : OutgoingMessage<'a>,
+    message:   OutgoingMessage<'a>,
 }
 
 impl<'a> SendBody<'a> {
-    pub fn new(recipient: Recipient, message: OutgoingMessage) -> SendBody {
-        SendBody { recipient, message }
+    pub fn new(recipient: Recipient, message: OutgoingMessage<'a>) -> Self {
+        Self { recipient, message }
+    }
+}
+
+/* ---------- OpenAI model enum ---------- */
+
+pub enum Model {
+    GPT41nano,
+    GPT41mini,
+}
+
+impl Model {
+    pub fn id(&self) -> String {
+        match self {
+            Self::GPT41mini => "gpt-4.1-mini",
+            Self::GPT41nano => "gpt-4.1-nano",
+        }
+        .into()
     }
 }

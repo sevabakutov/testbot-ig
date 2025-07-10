@@ -1,5 +1,5 @@
 use actix_web::{HttpRequest, HttpResponse};
-use crate::{constants::{APP_SECRET, ESCALATED_CHATS, VERIFY_TOKEN}, models::Sender};
+use crate::{constants::{APP_SECRET, VERIFY_TOKEN}, memory::ESCALATED_CHATS, models::Sender};
 
 pub fn verify_challenge(req: &HttpRequest) -> HttpResponse {
     let qs = req.query_string();
