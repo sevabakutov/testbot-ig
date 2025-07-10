@@ -32,13 +32,10 @@ pub async fn instagram_dm_webhook(req: HttpRequest, body: web::Bytes) -> HttpRes
                 Some(s) => s,
                 None    => return HttpResponse::BadRequest().finish(),
             };
-            let recipient = match payload.recipient() {
-                Some(r) => r,
-                None    => return HttpResponse::BadRequest().finish(),
-            };
+            let recipient = sender.as_recipient();
             let chat_id = sender.id();
 
-            if is_escalated(sender) {
+            if is_escalated(&sender) {
                 println!("🚫 Chat {chat_id} escalated, skip bot");
                 return HttpResponse::Ok().finish();
             }
