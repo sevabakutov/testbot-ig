@@ -1,5 +1,5 @@
 use actix_web::{HttpRequest, HttpResponse};
-use crate::constants::{APP_SECRET, VERIFY_TOKEN};
+use crate::{constants::{APP_SECRET, ESCALATED_CHATS, VERIFY_TOKEN}, models::Sender};
 
 pub fn verify_challenge(req: &HttpRequest) -> HttpResponse {
     let qs = req.query_string();
@@ -60,4 +60,12 @@ pub fn verify_signature(req: &HttpRequest, body: &[u8]) -> Result<(), HttpRespon
 
     println!("🔒 Signature verified");
     Ok(())
+}
+
+pub fn is_escalated(sender: &Sender) -> bool {
+    ESCALATED_CHATS.lock().unwrap().get(sender.id()).copied().unwrap_or(false)
+}
+
+pub fn mark_escalated(sender: &Sender) {
+    ESCALATED_CHATS.lock().unwrap().insert(sender.id().to_string(), true);
 }

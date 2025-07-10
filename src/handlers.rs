@@ -1,5 +1,5 @@
 use actix_web::{http::Method, web, HttpRequest, HttpResponse};
-use crate::{api::{escalate, send_dm}, models::{OutgoingMessage, WebhookPayload}, utils::{verify_challenge, verify_signature}};
+use crate::{api::{escalate, send_dm}, models::{OutgoingMessage, WebhookPayload}, utils::{is_escalated, verify_challenge, verify_signature}};
 
 pub async fn instagram_dm_webhook(req: HttpRequest, body: web::Bytes) -> HttpResponse {
     match *req.method() {
@@ -18,6 +18,12 @@ pub async fn instagram_dm_webhook(req: HttpRequest, body: web::Bytes) -> HttpRes
                 }
             };
             println!("📨 {payload:#}");
+
+            let sender = payload.primary_sender().unwrap();
+            if is_escalated(sender) {
+                println!("🚫 Chat {} is escalated, skipping bot reply", sender.id());
+                return HttpResponse::Ok().finish();
+            }
 
             if payload.is_bot_echo() {
                 return HttpResponse::Ok().finish();

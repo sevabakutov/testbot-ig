@@ -1,5 +1,7 @@
-use std::env;
+use std::{collections::HashMap, env, sync::Mutex};
 use once_cell::sync::Lazy;
+
+pub static ESCALATED_CHATS: Lazy<Mutex<HashMap<String, bool>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 
 pub static IG_USER_ID: Lazy<String> = Lazy::new(|| {
     env::var("IG_USER_ID").expect("IG_USER_ID env-var is missing")

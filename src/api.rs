@@ -4,7 +4,7 @@ use actix_web::{
 };
 use reqwest::Client;
 
-use crate::{constants::{ACCESS_TOKEN, DM_URL}, models::{OutgoingMessage, Recipient, SendBody}};
+use crate::{constants::{ACCESS_TOKEN, DM_URL}, models::{OutgoingMessage, Recipient, SendBody}, utils::mark_escalated};
 
 pub async fn send_dm<'a>(recipient: Recipient, message: OutgoingMessage<'a>) -> Result<()> {
     let body = SendBody::new(recipient, message);
@@ -23,6 +23,7 @@ pub async fn send_dm<'a>(recipient: Recipient, message: OutgoingMessage<'a>) -> 
 }
 
 pub async fn escalate(recipient: Recipient) -> Result<()> {
+    let sender = recipient.as_sender();
     let message = OutgoingMessage::from("😊");
     let body = SendBody::new(recipient, message);
 
@@ -35,6 +36,8 @@ pub async fn escalate(recipient: Recipient) -> Result<()> {
         .map_err(ErrorInternalServerError)?
         .error_for_status()
         .map_err(ErrorInternalServerError)?;
+
+    mark_escalated(&sender);
 
     Ok(())
 }

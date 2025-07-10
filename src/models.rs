@@ -1,6 +1,5 @@
 use std::{fmt::{self, Display, Formatter}};
 use serde::{Deserialize, Serialize};
-
 use crate::constants::IG_USER_ID;
 
 #[derive(Debug, Deserialize)]
@@ -15,14 +14,24 @@ pub struct Sender {
 }
 
 impl Sender {
+    pub fn new(id: &str) -> Self {
+        Self {
+            id: id.to_string()
+        }
+    }
+
     pub fn as_recipient(&self) -> Recipient {
-        Recipient::new(self.id.as_str())
+        Recipient::new(self.id())
+    }
+
+    pub fn id(&self) -> &str {
+        &self.id
     }
 }
 
 impl Display for Sender {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.id)
+        write!(f, "{}", self.id())
     }
 }
 
@@ -37,11 +46,19 @@ impl Recipient {
             id: id.to_string()
         }
     }
+
+    pub fn as_sender(&self) -> Sender {
+        Sender::new(self.id())
+    }
+
+    pub fn id(&self) -> &str {
+        &self.id
+    }
 }
 
 impl Display for Recipient {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.id)
+        write!(f, "{}", self.id())
     }
 }
 
