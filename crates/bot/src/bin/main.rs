@@ -1,6 +1,6 @@
 use std::env;
 use actix_web::{web, App, HttpServer};
-use testbot::handlers::instagram_dm_webhook;
+use bot::handlers::instagram_dm_webhook;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {

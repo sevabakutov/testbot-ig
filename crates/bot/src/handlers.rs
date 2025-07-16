@@ -6,7 +6,7 @@ use crate::{
         openai::OpenAIClient,
     },
     memory::{InMemoryStore, MemoryStore},
-    models::{OutgoingMessage, WebhookPayload},
+    models::{Model, OutgoingMessage, WebhookPayload},
     utils::{is_escalated, verify_challenge, verify_signature},
 };
 
@@ -61,7 +61,7 @@ pub async fn instagram_dm_webhook(req: HttpRequest, body: web::Bytes) -> HttpRes
                 return HttpResponse::Ok().finish();
             }
 
-            let openai_client = OpenAIClient::new();
+            let openai_client = OpenAIClient::new(Model::GPT41MiniFineTuned);
             let reply = match openai_client
                 .send(OutgoingMessage::from(incoming_text), history)
                 .await
