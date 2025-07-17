@@ -1,1 +1,1 @@
-web: ./target/release/testbot
+web: ./target/release/bot
