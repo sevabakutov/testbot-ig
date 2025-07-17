@@ -4,13 +4,13 @@ use actix_web::{web, App, HttpServer};
 
 use bot::{
     api::{
-        meta::{stream_by_paragraph},
+        meta::process_merged_message,
         openai::OpenAIClient,
     },
     debouncer::Debouncer,
     handlers::instagram_dm_webhook,
-    memory::{InMemoryStore, MemoryStore},
-    models::{Model, Recipient},
+    memory::InMemoryStore,
+    models::Model,
 };
 
 /// Сколько ждать после последнего входящего символа, прежде чем "слить" буфер.
@@ -54,57 +54,3 @@ async fn main() -> std::io::Result<()> {
     .await
 }
 
-async fn process_merged_message(
-    openai_client: &OpenAIClient,
-    memory: &InMemoryStore,
-    recipient: Recipient,
-    user_text: String,
-) {
-    let chat_id = recipient.id();
-    memory.push_user(chat_id, &user_text).await;
-
-    if let Err(e) = stream_by_paragraph(openai_client, memory, recipient.clone(), &user_text).await {
-        eprintln!("stream‑by‑paragraph error: {e}");
-    }
-}
-// async fn process_merged_message(
-//     openai_client: &OpenAIClient,
-//     memory: &InMemoryStore,
-//     recipient: Recipient,
-//     user_text: String,
-// ) {
-//     let chat_id = recipient.id();
-
-//     // 1. Обновляем историю
-//     memory.push_user(chat_id, &user_text).await;
-//     let history = memory.get(chat_id).await;
-
-//     // 2. Вызов модели
-//     let reply = match openai_client
-//         .send(OutgoingMessage::from(user_text.as_str()), history)
-//         .await
-//     {
-//         Ok(r) => r,
-//         Err(e) => {
-//             eprintln!("OpenAI error: {e}");
-//             return;
-//         }
-//     };
-
-//     // 3. Эскалация по триггеру
-//     if reply.trim() == "😊" {
-//         if let Err(err) = escalate(recipient.clone()).await {
-//             eprintln!("{err}");
-//         }
-//         println!("🛎️ Model escalated chat {chat_id}");
-//         return;
-//     }
-
-//     // 4. Отправляем ответ пользователю
-//     if let Err(e) = send_dm(recipient.clone(), OutgoingMessage::from(reply.replace("\"", "").as_str())).await {
-//         eprintln!("{e}");
-//     }
-
-//     // 5. Записываем ответ ассистента в память
-//     memory.push_assistant(chat_id, &reply).await;
-// }

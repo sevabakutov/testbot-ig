@@ -5,9 +5,23 @@ use actix_web::{
 use reqwest::Client;
 use tokio_stream::StreamExt;
 
-use crate::{api::openai::OpenAIClient, constants::{ACCESS_TOKEN, DM_URL}, memory::MemoryStore, models::{OutgoingMessage, Recipient, SendBody}, utils::mark_escalated};
+use crate::{api::openai::OpenAIClient, constants::{ACCESS_TOKEN, DM_URL}, memory::{InMemoryStore, MemoryStore}, models::{OutgoingMessage, Recipient, SendBody}, utils::mark_escalated};
 
 const IG_LIMIT: usize = 950;
+
+pub async fn process_merged_message(
+    openai_client: &OpenAIClient,
+    memory: &InMemoryStore,
+    recipient: Recipient,
+    user_text: String,
+) {
+    let chat_id = recipient.id();
+    memory.push_user(chat_id, &user_text).await;
+
+    if let Err(e) = stream_by_paragraph(openai_client, memory, recipient.clone(), &user_text).await {
+        eprintln!("stream‑by‑paragraph error: {e}");
+    }
+}
 
 /// Стримим ответ модели, режем по абзацам и шлём DM ≤950. Сохраняем полный ответ в историю.
 pub async fn stream_by_paragraph<M: MemoryStore>(
