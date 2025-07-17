@@ -38,7 +38,7 @@ impl OpenAIClient {
                 name: None,
             },
         ));
-        prompts.push(ChatCompletionRequestMessage::Developer(
+        prompts.push(ChatCompletionRequestMessage::Developer(   
             ChatCompletionRequestDeveloperMessage {
                 content: ChatCompletionRequestDeveloperMessageContent::from(developer_content),
                 name: None,
