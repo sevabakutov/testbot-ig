@@ -31,12 +31,12 @@ async fn main() -> std::io::Result<()> {
     {
         let debounce_clone = debounce.clone();
         let openai_clone = openai_client.clone();
-        actix_web::rt::spawn(async move {
+        tokio::spawn(async move {
             debounce_clone
                 .run(move |recipient, merged_text| {
                     let openai = openai_clone.clone();
                     let memory = memory.clone();
-                    actix_web::rt::spawn(async move {
+                    tokio::spawn(async move {
                         process_merged_message(&openai, &memory, recipient, merged_text).await;
                     });
                 })

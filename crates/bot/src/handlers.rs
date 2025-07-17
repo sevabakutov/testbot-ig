@@ -41,11 +41,10 @@ pub async fn instagram_dm_webhook(
 
             // "Нужен человек" — эскалация мгновенно, без модели.
             if payload.wants_human() {
-                if let Err(err) = escalate(recipient.clone()).await {
-                    eprintln!("{err}");
-                    return HttpResponse::InternalServerError().finish();
-                }
+                escalate(recipient.clone()).await;
+
                 println!("🛎️ User requested human, escalated chat {chat_id}");
+                
                 return HttpResponse::Ok().finish();
             }
 
