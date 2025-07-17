@@ -31,7 +31,7 @@ pub struct Recipient {
 impl Recipient {
     pub fn id(&self) -> &str { &self.id }
 
-    pub fn new(id: &str) -> Self { Self { id: id.into() } }
+    pub fn new<S: Into<String>>(id: S) -> Self { Self { id: id.into() } }
 
     pub fn as_sender(&self) -> Sender { Sender::new(self.id()) }
 }
@@ -205,7 +205,7 @@ impl<'a> SendBody<'a> {
 }
 
 /* ---------- OpenAI model enum ---------- */
-
+#[derive(Debug, Clone)]
 pub enum Model {
     GPT41nano,
     GPT41mini,

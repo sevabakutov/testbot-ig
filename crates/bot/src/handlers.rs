@@ -1,16 +1,12 @@
 use actix_web::{http::Method, web, HttpRequest, HttpResponse};
 
-use crate::{
-    api::{
-        meta::{escalate, send_dm},
-        openai::OpenAIClient,
-    },
-    memory::{InMemoryStore, MemoryStore},
-    models::{Model, OutgoingMessage, WebhookPayload},
-    utils::{is_escalated, verify_challenge, verify_signature},
-};
+use crate::{api::meta::escalate, debouncer::Debouncer, models::WebhookPayload, utils::{is_escalated, verify_challenge, verify_signature}};
 
-pub async fn instagram_dm_webhook(req: HttpRequest, body: web::Bytes) -> HttpResponse {
+pub async fn instagram_dm_webhook(
+    req: HttpRequest,
+    body: web::Bytes,
+    debounce: web::Data<Debouncer>,
+) -> HttpResponse {
     match *req.method() {
         Method::GET => verify_challenge(&req),
 
@@ -30,7 +26,7 @@ pub async fn instagram_dm_webhook(req: HttpRequest, body: web::Bytes) -> HttpRes
 
             let sender = match payload.sender() {
                 Some(s) => s,
-                None    => return HttpResponse::BadRequest().finish(),
+                None => return HttpResponse::BadRequest().finish(),
             };
             let recipient = sender.as_recipient();
             let chat_id = sender.id();
@@ -43,15 +39,7 @@ pub async fn instagram_dm_webhook(req: HttpRequest, body: web::Bytes) -> HttpRes
                 return HttpResponse::Ok().finish();
             }
 
-            let incoming_text = match payload.text() {
-                Some(t) => t,
-                None    => return HttpResponse::Ok().finish(),
-            };
-
-            let memory = InMemoryStore;
-            memory.push_user(chat_id, incoming_text).await;
-            let history = memory.get(chat_id).await;
-
+            // "Нужен человек" — эскалация мгновенно, без модели.
             if payload.wants_human() {
                 if let Err(err) = escalate(recipient.clone()).await {
                     eprintln!("{err}");
@@ -61,34 +49,13 @@ pub async fn instagram_dm_webhook(req: HttpRequest, body: web::Bytes) -> HttpRes
                 return HttpResponse::Ok().finish();
             }
 
-            let openai_client = OpenAIClient::new(Model::GPT41MiniFineTuned);
-            let reply = match openai_client
-                .send(OutgoingMessage::from(incoming_text), history)
-                .await
-            {
-                Ok(r) => r,
-                Err(e) => {
-                    eprintln!("OpenAI error: {e}");
-                    return HttpResponse::InternalServerError().finish();
-                }
+            let incoming_text = match payload.text() {
+                Some(t) => t,
+                None => return HttpResponse::Ok().finish(),
             };
 
-            if reply.trim() == "😊" {
-                if let Err(err) = escalate(recipient.clone()).await {
-                    eprintln!("{err}");
-                    return HttpResponse::InternalServerError().finish();
-                }
-                println!("🛎️ Model escalated chat {chat_id}");
-                return HttpResponse::Ok().finish();
-            }
-
-            println!("OpenAI response: {:?}", reply.clone());
-            if let Err(e) = send_dm(recipient.clone(), OutgoingMessage::from(reply.replace("\"", "").as_str())).await {
-                eprintln!("{e}");
-                return HttpResponse::InternalServerError().finish();
-            }
-
-            memory.push_assistant(chat_id, &reply).await;
+            // Кладём текст в дебоунсер — дальше ответит фоновая задача.
+            debounce.push(recipient.id(), incoming_text).await;
 
             HttpResponse::Ok().finish()
         }
