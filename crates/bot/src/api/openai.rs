@@ -7,6 +7,7 @@ use async_openai::{
     Client,
     Embeddings,
 };
+use tokio_stream::StreamExt;
 
 use crate::{
     constants::OPENAI_PROJECT_ID,
@@ -15,7 +16,7 @@ use crate::{
 
 #[derive(Clone)]
 pub struct OpenAIClient {
-    client: Arc<Client<OpenAIConfig>>,
+    client: Arc<Client<OpenAIConfig>>, // shared HTTP pool
     model: Model,
 }
 
@@ -29,46 +30,23 @@ impl OpenAIClient {
         }
     }
 
-    /// Доступ к embeddings‑эндпоинту.
-    pub fn embeddings(&self) -> Embeddings<'_, OpenAIConfig> {
-        self.client.embeddings()
-    }
+    /// Доступ к «сырым» методам клиента (нужно для внешнего стрима).
+    pub fn client(&self) -> &Client<OpenAIConfig> { &self.client }
 
-    /// Короткий геттер id модели.
-    pub fn model(&self) -> &str {
-        &self.model.id()
-    }
+    pub fn embeddings(&self) -> Embeddings<'_, OpenAIConfig> { self.client.embeddings() }
+    pub fn model(&self) -> &str { &self.model.id() }
 
-    /// Обычный (не‑стриминговый) вызов Chat Completions.
+    // -------- обычный не‑стриминговый вызов
     pub async fn send(
         &self,
         msg: OutgoingMessage<'_>,
         mut history: Vec<ChatCompletionRequestMessage>,
     ) -> Result<String> {
-        // ——— системные промпты ———
-        const SYSTEM_CONTENT: &str = include_str!("prompts/system.txt");
-        const DEV_CONTENT: &str = include_str!("prompts/developer.txt");
-
-        history.splice(
-            0..0,
-            [
-                ChatCompletionRequestMessage::System(ChatCompletionRequestSystemMessage {
-                    content: ChatCompletionRequestSystemMessageContent::from(SYSTEM_CONTENT),
-                    name: None,
-                }),
-                ChatCompletionRequestMessage::Developer(ChatCompletionRequestDeveloperMessage {
-                    content: ChatCompletionRequestDeveloperMessageContent::from(DEV_CONTENT),
-                    name: None,
-                }),
-            ],
-        );
-
-        history.push(ChatCompletionRequestMessage::User(
-            ChatCompletionRequestUserMessage {
-                content: ChatCompletionRequestUserMessageContent::from(msg.text()),
-                name: None,
-            },
-        ));
+        self.inject_system_messages(&mut history);
+        history.push(ChatCompletionRequestMessage::User(ChatCompletionRequestUserMessage {
+            content: ChatCompletionRequestUserMessageContent::from(msg.text()),
+            name: None,
+        }));
 
         let request = CreateChatCompletionRequestArgs::default()
             .model(self.model())
@@ -90,59 +68,65 @@ impl OpenAIClient {
             .ok_or_else(|| ErrorInternalServerError("empty response"))?)
     }
 
-    // /// Вариант со стримингом (SSE). Возвращает итоговую строку,
-    // /// но при желании можно передавать чанки наружу в замыкание‑callback.
-    // pub async fn send_stream(
-    //     &self,
-    //     msg: OutgoingMessage<'_>,
-    //     mut history: Vec<ChatCompletionRequestMessage>,
-    // ) -> Result<String> {
-    //     history.splice(
-    //         0..0,
-    //         [
-    //             ChatCompletionRequestMessage::System(ChatCompletionRequestSystemMessage {
-    //                 content: ChatCompletionRequestSystemMessageContent::from(
-    //                     include_str!("prompts/system.txt"),
-    //                 ),
-    //                 name: None,
-    //             }),
-    //             ChatCompletionRequestMessage::Developer(ChatCompletionRequestDeveloperMessage {
-    //                 content: ChatCompletionRequestDeveloperMessageContent::from(
-    //                     include_str!("prompts/developer.txt"),
-    //                 ),
-    //                 name: None,
-    //             }),
-    //         ],
-    //     );
-    //     history.push(ChatCompletionRequestMessage::User(
-    //         ChatCompletionRequestUserMessage {
-    //             content: ChatCompletionRequestUserMessageContent::from(msg.text()),
-    //             name: None,
-    //         },
-    //     ));
+    // -------- стриминг: готовим запрос, возвращаем итоговую строку --------
+    pub async fn send_stream(
+        &self,
+        msg: OutgoingMessage<'_>,
+        history: Vec<ChatCompletionRequestMessage>,
+    ) -> Result<String> {
+        let request = self.prepare_stream_request(msg.text(), history)?;
+        let mut stream = self
+            .client
+            .chat()
+            .create_stream(request)
+            .await
+            .map_err(ErrorInternalServerError)?;
 
-    //     let request = CreateChatCompletionRequestArgs::default()
-    //         .model(self.model())
-    //         .messages(history)
-    //         .stream(true)
-    //         .build()
-    //         .unwrap();
+        let mut answer = String::new();
+        while let Some(chunk) = stream.next().await.transpose().map_err(ErrorInternalServerError)? {
+            if let Some(delta) = chunk.choices[0].delta.content.clone() {
+                answer.push_str(&delta);
+            }
+        }
+        Ok(answer)
+    }
 
-    //     let mut stream = self
-    //         .client
-    //         .chat()
-    //         .create_stream(request)
-    //         .await
-    //         .map_err(ErrorInternalServerError)?;
+    // -------- helper‑ы --------
+    pub fn prepare_stream_request(
+        &self,
+        user_text: &str,
+        mut history: Vec<ChatCompletionRequestMessage>,
+    ) -> Result<CreateChatCompletionRequest, actix_web::Error> {
+        self.inject_system_messages(&mut history);
+        history.push(ChatCompletionRequestMessage::User(ChatCompletionRequestUserMessage {
+            content: ChatCompletionRequestUserMessageContent::from(user_text),
+            name: None,
+        }));
 
-    //     let mut answer = String::new();
-    //     while let Some(chunk) = stream.
-        
-    //     .await.transpose().map_err(ErrorInternalServerError)? {
-    //         if let Some(delta) = chunk.choices[0].delta.content.clone() {
-    //             answer.push_str(&delta);
-    //         }
-    //     }
-    //     Ok(answer)
-    // }
+        Ok(CreateChatCompletionRequestArgs::default()
+            .model(self.model())
+            .messages(history)
+            .stream(true)
+            .build()
+            .unwrap()
+        )
+    }
+
+    fn inject_system_messages(&self, history: &mut Vec<ChatCompletionRequestMessage>) {
+        const SYSTEM_CONTENT: &str = include_str!("prompts/system.txt");
+        const DEV_CONTENT: &str = include_str!("prompts/developer.txt");
+        history.splice(
+            0..0,
+            [
+                ChatCompletionRequestMessage::System(ChatCompletionRequestSystemMessage {
+                    content: ChatCompletionRequestSystemMessageContent::from(SYSTEM_CONTENT),
+                    name: None,
+                }),
+                ChatCompletionRequestMessage::Developer(ChatCompletionRequestDeveloperMessage {
+                    content: ChatCompletionRequestDeveloperMessageContent::from(DEV_CONTENT),
+                    name: None,
+                }),
+            ],
+        );
+    }
 }
