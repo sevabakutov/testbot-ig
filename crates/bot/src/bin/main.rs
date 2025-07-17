@@ -31,7 +31,7 @@ async fn main() -> std::io::Result<()> {
     {
         let debounce_clone = debounce.clone();
         let openai_clone = openai_client.clone();
-        tokio::spawn(async move {
+        actix_web::rt::spawn(async move {
             debounce_clone
                 .run(move |recipient, merged_text| {
                     let openai = openai_clone.clone();
