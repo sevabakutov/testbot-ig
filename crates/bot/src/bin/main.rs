@@ -3,12 +3,9 @@ use std::{env, time::Duration};
 use actix_web::{web, App, HttpServer};
 
 use bot::{
-    api::{
-        meta::process_merged_message,
-        openai::OpenAIClient,
-    },
+    api::openai::OpenAIClient,
     debouncer::Debouncer,
-    handlers::instagram_dm_webhook,
+    handlers::{instagram_dm_webhook, process_merged_message},
     memory::InMemoryStore,
     models::Model,
 };
@@ -23,8 +20,12 @@ async fn main() -> std::io::Result<()> {
         .parse()
         .expect("PORT must be a number");
 
+    // let qdrant = VectorStore::new("http://localhost:6334")
+    //     .await
+    //     .expect("Qdrant init failed");
+
     let debounce = Debouncer::new(Duration::from_millis(WINDOW_MS));
-    let openai_client = OpenAIClient::new(Model::GPT41MiniFineTuned);
+    let openai_client = OpenAIClient::new(Model::GPT41mini);
     let memory = InMemoryStore;
 
     // --- фоновая задача, которая склеивает сообщения и зовёт модель ---
@@ -36,8 +37,10 @@ async fn main() -> std::io::Result<()> {
                 .run(move |recipient, merged_text| {
                     let openai = openai_clone.clone();
                     let memory = memory.clone();
+                    // let vstore  = vstore.clone();
                     tokio::spawn(async move {
-                        process_merged_message(&openai, &memory, recipient, merged_text).await;
+                        process_merged_message(&openai, &memory, recipient, merged_text).await
+                        // process_merged_message(&openai, &memory, &vstore, recipient, merged_text).await
                     });
                 })
                 .await;
@@ -47,6 +50,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(debounce.clone()))
+            // .app_data(web::Data::new(qdrant.clone()))
             .route("/app/instagram", web::to(instagram_dm_webhook))
     })
     .bind(("0.0.0.0", port))?

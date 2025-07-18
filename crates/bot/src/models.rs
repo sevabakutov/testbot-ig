@@ -145,11 +145,6 @@ impl WebhookPayload {
             .unwrap_or(false)
     }
 
-    /// Клиент попросил человека
-    pub fn wants_human(&self) -> bool {
-        self.text().map(|t| t.trim() == "human agent").unwrap_or(false)
-    }
-
     /// Чат-идентификатор: используем ID отправителя
     pub fn chat_id(&self) -> Option<&str> {
         self.sender().map(|s| s.id())

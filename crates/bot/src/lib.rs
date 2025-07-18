@@ -5,3 +5,4 @@ pub mod api;
 pub mod constants;
 pub mod memory;
 pub mod debouncer;
+pub mod vector_store;

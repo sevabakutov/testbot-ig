@@ -1,8 +1,6 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::{sync::Mutex, time::{sleep, Instant}};
-
 use crate::models::Recipient;
-
 
 struct Pending {
     buf: String,

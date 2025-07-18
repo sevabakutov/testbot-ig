@@ -2,4 +2,4 @@
 members = [
     "crates/bot",
     "crates/fine-tuning"
-]
+, "crates/vector-db"]

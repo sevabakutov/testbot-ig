@@ -1,22 +1,21 @@
 use std::sync::Arc;
-
-use actix_web::{error::ErrorInternalServerError, Result};
+use anyhow::{anyhow, Context, Result};
 use async_openai::{
     config::OpenAIConfig,
     types::*,
     Client,
-    Embeddings,
 };
-use tokio_stream::StreamExt;
-
 use crate::{
-    constants::OPENAI_PROJECT_ID,
-    models::{Model, OutgoingMessage},
+    constants::{DIM_SIZE, OPENAI_PROJECT_ID},
+    models::{
+        Model, 
+        OutgoingMessage
+    },
 };
 
 #[derive(Clone)]
 pub struct OpenAIClient {
-    client: Arc<Client<OpenAIConfig>>, // shared HTTP pool
+    client: Arc<Client<OpenAIConfig>>,
     model: Model,
 }
 
@@ -30,13 +29,27 @@ impl OpenAIClient {
         }
     }
 
-    /// Доступ к «сырым» методам клиента (нужно для внешнего стрима).
     pub fn client(&self) -> &Client<OpenAIConfig> { &self.client }
-
-    pub fn embeddings(&self) -> Embeddings<'_, OpenAIConfig> { self.client.embeddings() }
     pub fn model(&self) -> &str { &self.model.id() }
 
-    // -------- обычный не‑стриминговый вызов
+    pub async fn embed(&self, text: String) -> Result<Vec<f32>> {
+        let response = self
+            .client
+            .embeddings()
+            .create(
+                CreateEmbeddingRequestArgs::default()
+                    .model("text-embedding-3-large")
+                    .dimensions(DIM_SIZE as u32)
+                    .input(EmbeddingInput::String(text))
+                    .build()
+                    .context("Failed to build embedding request")?
+            )
+            .await
+            .context("Failed to embed")?;
+
+        Ok(response.data[0].embedding.clone())
+    }
+
     pub async fn send(
         &self,
         msg: OutgoingMessage<'_>,
@@ -52,46 +65,23 @@ impl OpenAIClient {
             .model(self.model())
             .messages(history)
             .build()
-            .unwrap();
+            .context("Failed to build request")?;
 
         let response = self
             .client
             .chat()
             .create(request)
             .await
-            .map_err(ErrorInternalServerError)?;
+            .context("Failed to send request")?;
 
         Ok(response
             .choices
             .get(0)
             .and_then(|c| c.message.content.clone())
-            .ok_or_else(|| ErrorInternalServerError("empty response"))?)
+            .ok_or_else(|| anyhow!("empty response"))?
+        )
     }
 
-    // -------- стриминг: готовим запрос, возвращаем итоговую строку --------
-    pub async fn send_stream(
-        &self,
-        msg: OutgoingMessage<'_>,
-        history: Vec<ChatCompletionRequestMessage>,
-    ) -> Result<String> {
-        let request = self.prepare_stream_request(msg.text(), history)?;
-        let mut stream = self
-            .client
-            .chat()
-            .create_stream(request)
-            .await
-            .map_err(ErrorInternalServerError)?;
-
-        let mut answer = String::new();
-        while let Some(chunk) = stream.next().await.transpose().map_err(ErrorInternalServerError)? {
-            if let Some(delta) = chunk.choices[0].delta.content.clone() {
-                answer.push_str(&delta);
-            }
-        }
-        Ok(answer)
-    }
-
-    // -------- helper‑ы --------
     pub fn prepare_stream_request(
         &self,
         user_text: &str,
@@ -109,6 +99,40 @@ impl OpenAIClient {
             .stream(true)
             .build()
             .unwrap()
+        )
+    }
+
+    pub fn prepare_stream_request_with_memory(
+        &self,
+        user_text: &str,
+        mut history: Vec<ChatCompletionRequestMessage>,
+        rag_memory: &str,
+    ) -> Result<CreateChatCompletionRequest> {
+        self.inject_system_messages(&mut history);
+
+        /* Вставляем память как отдельный System‑message */
+        history.insert(2, ChatCompletionRequestMessage::System(
+            ChatCompletionRequestSystemMessage {
+                content: ChatCompletionRequestSystemMessageContent::from(
+                    format!("MEMORY:\n{}", rag_memory)
+                ),
+                name: None,
+            }
+        ));
+
+        history.push(ChatCompletionRequestMessage::User(
+            ChatCompletionRequestUserMessage {
+                content: ChatCompletionRequestUserMessageContent::from(user_text),
+                name: None,
+            },
+        ));
+
+        Ok(CreateChatCompletionRequestArgs::default()
+            .model(self.model())
+            .messages(history)
+            .stream(true)
+            .build()
+            .context("Failed to build stream")?
         )
     }
 
