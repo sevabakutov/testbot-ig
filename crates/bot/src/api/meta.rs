@@ -5,7 +5,7 @@ use crate::{
     api::openai::OpenAIClient, 
     constants::{
         ACCESS_TOKEN, 
-        DM_URL
+        DM_URL, IG_LIMIT
     }, 
     memory::MemoryStore, 
     models::{
@@ -16,7 +16,6 @@ use crate::{
     utils::mark_escalated
 };
 
-const IG_LIMIT: usize = 950;
 
 /// Стримим ответ модели, режем по абзацам и шлём DM ≤950. Сохраняем полный ответ в историю.
 pub async fn stream_by_paragraph<M: MemoryStore>(
@@ -24,17 +23,12 @@ pub async fn stream_by_paragraph<M: MemoryStore>(
     memory: &M,
     recipient: Recipient,
     user_text: &str,
-    // rag_memory: &str,
+    rag_memory: &str,
 ) -> Result<()> {
     let chat_id = recipient.id();
     let history = memory.get(chat_id).await;
-    let request = openai.prepare_stream_request(user_text, history).unwrap();
 
-    // let request = openai.prepare_stream_request_with_memory(
-    //     user_text,
-    //     history,
-    //     rag_memory,             // NEW
-    // )?;
+    let request = openai.prepare_stream_request_with_memory(user_text, history, rag_memory, recipient.id())?;
 
     let mut stream = openai
         .client()

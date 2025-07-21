@@ -1,35 +1,52 @@
 use actix_web::{http::Method, web, HttpRequest, HttpResponse};
 use anyhow::Result;
-use crate::{api::{meta::stream_by_paragraph, openai::OpenAIClient}, debouncer::Debouncer, memory::{InMemoryStore, MemoryStore}, models::{Recipient, WebhookPayload}, utils::{is_escalated, verify_challenge, verify_signature}};
+use crate::*;
+use api::{meta::stream_by_paragraph, openai::OpenAIClient};
+use debouncer::Debouncer;
+use memory::{InMemoryStore, MemoryStore};
+use models::{Recipient, WebhookPayload};
+use utils::{is_escalated, verify_challenge, verify_signature};
+use vector_store::VectorStore;
 
+/// Функция обработки сообщения из буфера. 
+/// 
+/// Идентифецирует язык => вызывает эмбидинг сообщения пользователя => поиск эмбидинга с фильтром языка в векторной бд => открытие стрима.
 pub async fn process_merged_message(
     openai_client: &OpenAIClient,
     memory: &InMemoryStore,
+    vstore: &VectorStore,
     recipient: Recipient,
     user_text: String,
 ) -> Result<()> {
     let chat_id = recipient.id();
     memory.push_user(chat_id, &user_text).await;
 
-    // let query_vec = openai_client.embed(user_text.clone()).await?;
-    // let lang = if user_text.contains('ł') || user_text.contains("wizyt") { "pl" } else { "uk" };
-    // let snippets = vstore.search(query_vec, lang, 3).await?;  
-    // let memory_block = snippets
-    //     .iter()
-    //     .enumerate()
-    //     .map(|(i,s)| format!("{}. {}", i+1, s))
-    //     .collect::<Vec<_>>()
-    //     .join("\n\n");
+    let lang = openai_client.identify_language(user_text.as_str()).await?;
+    let query_vec = openai_client.embed(user_text.clone()).await?;
 
-    // stream_by_paragraph(openai_client, memory, recipient, &user_text, &memory_block).await
-    stream_by_paragraph(openai_client, memory, recipient.clone(), &user_text).await
+    let snippets = vstore
+        .search_with_limit(query_vec, 3, lang.as_str())
+        .await?
+        .iter()
+        .enumerate()
+        .map(|(i,s)| format!("{}. {}", i+1, s))
+        .collect::<Vec<_>>()
+        .join("\n\n");
+        
+
+    stream_by_paragraph(openai_client, memory, recipient, &user_text, &snippets).await
 }
 
+/// Инстаграм вэб хук.
+/// 
+/// Обрабатывает входящие сообщения и пушит их в дебаунсер. Возвращает ошибку при любой ошибке парсинга. 
+/// чат уже эскалирован => Ок. 
+/// эхо бота => Ок.
+/// пустой пейлоад => Ок.
 pub async fn instagram_dm_webhook(
     req: HttpRequest,
     body: web::Bytes,
     debounce: web::Data<Debouncer>,
-    // vstore: web::Data<VectorStore>,
 ) -> HttpResponse {
     match *req.method() {
         Method::GET => verify_challenge(&req),

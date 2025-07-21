@@ -199,22 +199,7 @@ impl<'a> SendBody<'a> {
     }
 }
 
-/* ---------- OpenAI model enum ---------- */
-#[derive(Debug, Clone)]
-pub enum Model {
-    GPT41nano,
-    GPT41mini,
-    TextEmbedding3Large,
-    GPT41MiniFineTuned
-}
-
-impl Model {
-    pub fn id(&self) -> &str {
-        match self {
-            Self::GPT41mini           => "gpt-4.1-mini",
-            Self::GPT41nano           => "gpt-4.1-nano",
-            Self::TextEmbedding3Large => "text-embedding-3-large",
-            Self::GPT41MiniFineTuned  => "ft:gpt-4.1-mini-2025-04-14:personal:test-ig-bot:Btvegwb1"
-        }
-    }
+#[derive(Deserialize)]
+pub struct LanguageResponse {
+    pub language: String,
 }

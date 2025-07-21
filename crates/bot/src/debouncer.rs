@@ -21,6 +21,7 @@ impl Debouncer {
         }
     }
 
+    /// Добавление нового сообщения в цикл. Если айди чата уже в буфере, обновляеться время добавления последнего сообщения для этого чата, тем самым происходит склеивание разных сообщений в одно.
     pub async fn push(&self, chat_id: &str, text: &str) {
         let mut map = self.inner.lock().await;
         let entry = map.entry(chat_id.to_string()).or_insert_with(|| Pending {
@@ -35,6 +36,7 @@ impl Debouncer {
         entry.last = Instant::now();
     }
 
+    /// Функция запуска фоновой задачи обработки входящих сообщений и очистка буферов для разных чатов. 
     pub async fn run<F>(self, mut on_ready: F) -> !
     where
         F: FnMut(Recipient /*chat_id*/, String /*merged text*/) + Send + 'static,
