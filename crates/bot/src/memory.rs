@@ -19,9 +19,9 @@ const MAX_MESSAGES: usize = 20;
 
 #[async_trait]
 pub trait MemoryStore: Send + Sync + 'static {
-    async fn get(&self, chat_id: &str) -> Vec<ChatCompletionRequestMessage>;
+    fn get(&self, chat_id: &str) -> Vec<ChatCompletionRequestMessage>;
 
-    async fn push_user(&self, chat_id: &str, content: &str);
+    fn push_user(&self, chat_id: &str, content: &str);
 
     async fn push_assistant(&self, chat_id: &str, content: &str);
 
@@ -33,7 +33,7 @@ pub struct InMemoryStore;
 
 #[async_trait]
 impl MemoryStore for InMemoryStore {
-    async fn get(&self, chat_id: &str) -> Vec<ChatCompletionRequestMessage> {
+    fn get(&self, chat_id: &str) -> Vec<ChatCompletionRequestMessage> {
         MEMORY
             .lock()
             .unwrap()
@@ -42,7 +42,7 @@ impl MemoryStore for InMemoryStore {
             .unwrap_or_default()
     }
 
-    async fn push_user(&self, chat_id: &str, content: &str) {
+    fn push_user(&self, chat_id: &str, content: &str) {
         let mut data = MEMORY.lock().unwrap();
         let entry = data.entry(chat_id.to_string()).or_default();
         entry.push(ChatCompletionRequestMessage::User(

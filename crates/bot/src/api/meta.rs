@@ -1,13 +1,10 @@
 use anyhow::{Context, Result};
 use reqwest::Client;
-use tokio_stream::StreamExt;
 use crate::{
-    api::openai::OpenAIClient, 
     constants::{
         ACCESS_TOKEN, 
         DM_URL, IG_LIMIT
     }, 
-    memory::MemoryStore, 
     models::{
         OutgoingMessage, 
         Recipient, 
@@ -16,67 +13,28 @@ use crate::{
     utils::mark_escalated
 };
 
-
-/// Стримим ответ модели, режем по абзацам и шлём DM ≤950. Сохраняем полный ответ в историю.
-pub async fn stream_by_paragraph<M: MemoryStore>(
-    openai: &OpenAIClient,
-    memory: &M,
-    recipient: Recipient,
-    user_text: &str,
-    rag_memory: &str,
-) -> Result<()> {
-    let chat_id = recipient.id();
-    let history = memory.get(chat_id).await;
-
-    let request = openai.prepare_stream_request_with_memory(user_text, history, rag_memory, recipient.id())?;
-
-    let mut stream = openai
-        .client()
-        .chat()
-        .create_stream(request)
-        .await
-        .context("Failed to create stream")?;
-
-    let mut para_buf = String::new();
+pub async fn send_to_ig_by_paragraphs(recipient: Recipient, text: &str) -> Result<()> {
     let mut dm_buf = String::new();
-    let mut full_answer = String::new();
+    let mut para_buf = String::new();
 
-    while let Some(chunk) = stream.next().await.transpose().context("Failed to get stream's chunk")? {
-        if let Some(delta) = chunk.choices[0].delta.content.clone() {
-            para_buf.push_str(&delta);
-            full_answer.push_str(&delta);
+    for line in text.split_inclusive('\n') {
+        let mut paragraph = line.trim_end_matches('\n').to_string();
+        if paragraph.ends_with('\r') {
+            paragraph.pop();
+        }
+        para_buf.push_str(&paragraph);
 
-            while let Some(pos) = para_buf.find('\n') {
-                let mut paragraph = para_buf[..pos].to_string();
-
-                if paragraph.ends_with('\r') { 
-                    paragraph.pop(); 
-                }
-                
-                para_buf.drain(..=pos);
-                
-                send_paragraph(&mut dm_buf, &paragraph, &recipient).await?;
-            }
+        if line.ends_with('\n') {
+            send_paragraph(&mut dm_buf, &para_buf, &recipient).await?;
+            para_buf.clear();
         }
     }
-
     if !para_buf.is_empty() {
         send_paragraph(&mut dm_buf, &para_buf, &recipient).await?;
     }
     if !dm_buf.is_empty() {
-        send_dm(recipient.clone(), OutgoingMessage::from(dm_buf.as_str())).await?
+        send_dm(recipient.clone(), OutgoingMessage::from(dm_buf.as_str())).await?;
     }
-
-    if full_answer.trim() == "😊" {
-        escalate(recipient.clone()).await?;
-
-        println!("🛎️ Model escalated chat {chat_id}");
-
-        return Ok(());
-    }
-
-    memory.push_assistant(chat_id, &full_answer).await;
-
     Ok(())
 }
 

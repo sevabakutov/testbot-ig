@@ -1,9 +1,9 @@
 use actix_web::{http::Method, web, HttpRequest, HttpResponse};
 use anyhow::Result;
 use crate::*;
-use api::{meta::stream_by_paragraph, openai::OpenAIClient};
+use api::openai::OpenAIClient;
 use debouncer::Debouncer;
-use memory::{InMemoryStore, MemoryStore};
+use memory::InMemoryStore;
 use models::{Recipient, WebhookPayload};
 use utils::{is_escalated, verify_challenge, verify_signature};
 use vector_store::VectorStore;
@@ -13,28 +13,12 @@ use vector_store::VectorStore;
 /// Идентифецирует язык => вызывает эмбидинг сообщения пользователя => поиск эмбидинга с фильтром языка в векторной бд => открытие стрима.
 pub async fn process_merged_message(
     openai_client: &OpenAIClient,
-    memory: &InMemoryStore,
+    history: &InMemoryStore,
     vstore: &VectorStore,
     recipient: Recipient,
     user_text: String,
 ) -> Result<()> {
-    let chat_id = recipient.id();
-    memory.push_user(chat_id, &user_text).await;
-
-    let lang = openai_client.identify_language(user_text.as_str()).await?;
-    let query_vec = openai_client.embed(user_text.clone()).await?;
-
-    let snippets = vstore
-        .search_with_limit(query_vec, 3, lang.as_str())
-        .await?
-        .iter()
-        .enumerate()
-        .map(|(i,s)| format!("{}. {}", i+1, s))
-        .collect::<Vec<_>>()
-        .join("\n\n");
-        
-
-    stream_by_paragraph(openai_client, memory, recipient, &user_text, &snippets).await
+    openai_client.stream_by_paragraph_with_tools(history, recipient, &user_text, vstore).await
 }
 
 /// Инстаграм вэб хук.

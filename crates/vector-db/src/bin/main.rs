@@ -1,11 +1,8 @@
-use anyhow::{Context, Result};
-use async_openai::{config::OpenAIConfig, types::{CreateEmbeddingRequest, EmbeddingInput}, Client};
+use anyhow::Result;
 use qdrant_client::{qdrant::{CreateCollectionBuilder, Distance, PointStruct, UpsertPointsBuilder, VectorParamsBuilder}, Payload, Qdrant};
 use serde_json::json;
+use vector_db::{constants::{COLLECTION_NAME, CONNECTION_STRING, VECTOR_SIZE}, tools::embed};
 
-const COLLECTION_NAME: &'static str = "answers";
-const CONNECTION_STRING: &'static str = "http://localhost:6334";
-const VECTOR_SIZE: u64 = 1536;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -74,20 +71,4 @@ async fn main() -> Result<()> {
     client.upsert_points(upsert).await?;
 
     Ok(())
-}
-
-async fn embed(text: &str) -> Result<Vec<f32>> {
-    let config = OpenAIConfig::default();
-    let client = Client::with_config(config);
-
-    let response = client.embeddings().create(CreateEmbeddingRequest {
-        model: "text-embedding-3-large".to_string(),
-        input: EmbeddingInput::String(text.to_string()),
-        dimensions: Some(VECTOR_SIZE as u32),
-        ..Default::default()
-    })
-    .await
-    .context("Failed to embed")?;
-
-    Ok(response.data[0].embedding.clone())
 }
