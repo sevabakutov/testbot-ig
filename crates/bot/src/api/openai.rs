@@ -379,54 +379,9 @@ impl OpenAIClient {
 
     }
 
-    // pub fn prepare_stream_request_with_memory(
-    //     &self,
-    //     user_text: &str,
-    //     mut history: Vec<ChatCompletionRequestMessage>,
-    //     snippets: &str,
-    //     chat_id: &str
-    // ) -> Result<CreateChatCompletionRequest> {
-    //     self.inject_system_messages(&mut history);
-
-    //     history.insert(2, ChatCompletionRequestMessage::System(
-    //         ChatCompletionRequestSystemMessage {
-    //             content: ChatCompletionRequestSystemMessageContent::from(
-    //                 format!("MEMORY:\n{}", snippets)
-    //             ),
-    //             name: None,
-    //         }
-    //     ));
-
-    //     history.insert(3, ChatCompletionRequestMessage::System(
-    //         ChatCompletionRequestSystemMessage { 
-    //             content: ChatCompletionRequestSystemMessageContent::from(
-    //                 format!("CHAT SUMMARIZE:\n{}", get_chat_summary(chat_id))
-    //             ), 
-    //             name: None
-    //         }
-    //     ));
-
-    //     history.push(ChatCompletionRequestMessage::User(
-    //         ChatCompletionRequestUserMessage {
-    //             content: ChatCompletionRequestUserMessageContent::from(user_text),
-    //             name: None,
-    //         },
-    //     ));
-
-    //     println!("MESSAGES: {:#?}", history.clone());
-
-    //     Ok(CreateChatCompletionRequestArgs::default()
-    //         .model("gpt-4.1-mini")
-    //         .messages(history)
-    //         .stream(true)
-    //         .build()
-    //         .context("Failed to build stream")?
-    //     )
-    // }
-
     fn inject_system_messages(&self, history: &mut Vec<ChatCompletionRequestMessage>) {
         const SYSTEM_CONTENT: &str = include_str!("prompts/system.txt");
-        const DEV_CONTENT: &str = include_str!("prompts/developer.txt");
+        // const DEV_CONTENT: &str = include_str!("prompts/developer.txt");
 
         history.splice(
             0..0,
@@ -435,10 +390,10 @@ impl OpenAIClient {
                     content: ChatCompletionRequestSystemMessageContent::from(SYSTEM_CONTENT),
                     name: None,
                 }),
-                ChatCompletionRequestMessage::Developer(ChatCompletionRequestDeveloperMessage {
-                    content: ChatCompletionRequestDeveloperMessageContent::from(DEV_CONTENT),
-                    name: None,
-                }),
+                // ChatCompletionRequestMessage::Developer(ChatCompletionRequestDeveloperMessage {
+                //     content: ChatCompletionRequestDeveloperMessageContent::from(DEV_CONTENT),
+                //     name: None,
+                // }),
             ],
         );
     }
