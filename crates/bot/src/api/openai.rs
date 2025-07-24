@@ -62,28 +62,16 @@ impl OpenAIClient {
         recipient: Recipient,
         user_text: &str,
         vstore: &VectorStore,
-        // rag_memory: &str,
     ) -> Result<()> {
+        println!("👉 Начинаем обработку сообщения от {}: {}", recipient.id(), user_text);
+
         let chat_id = recipient.id();
         let mut history = memory.get(chat_id);
         
-        // 1. Вставляем два систменых пропта с папки prompts/
-        // 2. Вставляем информацию из векторной базы данных
-        // 3. Вставляем резюме чата
-        // 4. Вставляем запрос пользователя
+        // 1. Системные + Developer
         self.inject_system_messages(&mut history);
 
-        // history.insert(
-        //     2,
-        //     ChatCompletionRequestMessage::System(ChatCompletionRequestSystemMessage {
-        //         content: ChatCompletionRequestSystemMessageContent::from(format!(
-        //             "ИНФОРМАЦИЯ С ВЕКТОРНОЙ БАЗЫ ДАННЫХ ВЗЯТАЯ ВЫЗОВОМ ФУНКЦИЙ:\n{}",
-        //             rag_memory
-        //         )),
-        //         name: None,
-        //     }),
-        // );
-
+        // 2. Резюме чата
         history.insert(
             2,
             ChatCompletionRequestMessage::System(ChatCompletionRequestSystemMessage {
@@ -96,6 +84,7 @@ impl OpenAIClient {
             }),
         );
 
+        // 3. Сообщение пользователя
         history.push(ChatCompletionRequestMessage::User(
             ChatCompletionRequestUserMessage {
                 content: user_text.into(),
@@ -103,14 +92,18 @@ impl OpenAIClient {
             },
         ));
         
-        // крутимся, пока модель не закончит tool calls
-        let final_answer = self
-            .complete_with_tools(history, vstore, )
-            .await?;
+        // 4. Диалог с инструментами (цикл)
+        let final_answer = match self.complete_with_tools(history, vstore).await {
+            Ok(ans) => ans,
+            Err(e) => {
+                println!("❌ complete_with_tools error: {}", e);
+                return Err(e);
+            }
+        };
 
-        println!("✅ Финальный ответ модели ({} символов):\n{}", final_answer.len(), final_answer);
+        println!("\n✅ Финальный ответ модели ({} символов):\n{}", final_answer.len(), final_answer);
 
-        // режем и отправляем в IG
+        // 5. Отправляем в IG
         send_to_ig_by_paragraphs(recipient.clone(), &final_answer).await?;
 
         Ok(())
@@ -143,7 +136,18 @@ impl OpenAIClient {
         history: Vec<ChatCompletionRequestMessage>,
         vstore: &VectorStore
     ) -> Result<RunWithToolsOutcome> {
-        println!("\n=== 📤 Отправляем запрос в OpenAI (messages: {}) ===", history.len());
+        println!("\n=== 📤 Запрос в OpenAI ({} messages) ===", history.len());
+
+        for (i, m) in history.iter().enumerate() {
+            match m {
+                ChatCompletionRequestMessage::System(s) => println!("→ {:02} SYSTEM   | {:?}", i, s.content),
+                ChatCompletionRequestMessage::Developer(s) => println!("→ {:02} DEVELOPER| {:?}", i,s.content),
+                ChatCompletionRequestMessage::User(u) => println!("→ {:02} USER     | {:?}", i, u.content),
+                ChatCompletionRequestMessage::Assistant(a) => println!("→ {:02} ASSISTANT     | {:?}", i, a.content),
+                _ => println!("→ {:02} OTHER    | {:?}", i, m),
+            }
+        }
+
         let request = CreateChatCompletionRequestArgs::default()
             .model("o4-mini")
             .messages(history)
@@ -208,7 +212,7 @@ impl OpenAIClient {
             .build()
             .context("Failed to build chat request")?;
 
-        println!("REQUEST:\n {:#?}\n", request.clone());
+        println!("REQUEST BUILT OK\n");
 
         let mut stream = self.client.chat().create_stream(request).await?;
 
