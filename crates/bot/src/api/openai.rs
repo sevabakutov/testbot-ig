@@ -145,7 +145,7 @@ impl OpenAIClient {
     ) -> Result<RunWithToolsOutcome> {
         println!("\n=== 📤 Отправляем запрос в OpenAI (messages: {}) ===", history.len());
         let request = CreateChatCompletionRequestArgs::default()
-            .model("gpt-4.1-mini")
+            .model("o4-mini")
             .messages(history)
             .tools(vec![
                 ChatCompletionTool {
@@ -160,7 +160,10 @@ impl OpenAIClient {
                                     "type": "string",
                                     "description": "задача — определить язык входного текста и вернуть результат в строгом структурированном формате. Русский → \"ru\"; Украинский → \"ua\"; Польский → \"pl\"; Остальное → \"unknown\""
                                 },
-                                "country": { "type": "string" },
+                                "country": { 
+                                    "type": "string",
+                                    "description": "Страна для фильтрации салонов. если страна Польша -> Poland, украина -> Ukraine"
+                                },
                             },
                             "required": ["lang", "country"]
                         }))
@@ -354,7 +357,7 @@ impl OpenAIClient {
         }
 
         let request = async_openai::types::CreateChatCompletionRequestArgs::default()
-            .model("gpt-4.1-mini")
+            .model("o4-mini")
             .messages(messages)
             .build()
             .context("Failed to build summarize_chat_memory request")?;
@@ -376,50 +379,50 @@ impl OpenAIClient {
 
     }
 
-    pub fn prepare_stream_request_with_memory(
-        &self,
-        user_text: &str,
-        mut history: Vec<ChatCompletionRequestMessage>,
-        snippets: &str,
-        chat_id: &str
-    ) -> Result<CreateChatCompletionRequest> {
-        self.inject_system_messages(&mut history);
+    // pub fn prepare_stream_request_with_memory(
+    //     &self,
+    //     user_text: &str,
+    //     mut history: Vec<ChatCompletionRequestMessage>,
+    //     snippets: &str,
+    //     chat_id: &str
+    // ) -> Result<CreateChatCompletionRequest> {
+    //     self.inject_system_messages(&mut history);
 
-        history.insert(2, ChatCompletionRequestMessage::System(
-            ChatCompletionRequestSystemMessage {
-                content: ChatCompletionRequestSystemMessageContent::from(
-                    format!("MEMORY:\n{}", snippets)
-                ),
-                name: None,
-            }
-        ));
+    //     history.insert(2, ChatCompletionRequestMessage::System(
+    //         ChatCompletionRequestSystemMessage {
+    //             content: ChatCompletionRequestSystemMessageContent::from(
+    //                 format!("MEMORY:\n{}", snippets)
+    //             ),
+    //             name: None,
+    //         }
+    //     ));
 
-        history.insert(3, ChatCompletionRequestMessage::System(
-            ChatCompletionRequestSystemMessage { 
-                content: ChatCompletionRequestSystemMessageContent::from(
-                    format!("CHAT SUMMARIZE:\n{}", get_chat_summary(chat_id))
-                ), 
-                name: None
-            }
-        ));
+    //     history.insert(3, ChatCompletionRequestMessage::System(
+    //         ChatCompletionRequestSystemMessage { 
+    //             content: ChatCompletionRequestSystemMessageContent::from(
+    //                 format!("CHAT SUMMARIZE:\n{}", get_chat_summary(chat_id))
+    //             ), 
+    //             name: None
+    //         }
+    //     ));
 
-        history.push(ChatCompletionRequestMessage::User(
-            ChatCompletionRequestUserMessage {
-                content: ChatCompletionRequestUserMessageContent::from(user_text),
-                name: None,
-            },
-        ));
+    //     history.push(ChatCompletionRequestMessage::User(
+    //         ChatCompletionRequestUserMessage {
+    //             content: ChatCompletionRequestUserMessageContent::from(user_text),
+    //             name: None,
+    //         },
+    //     ));
 
-        println!("MESSAGES: {:#?}", history.clone());
+    //     println!("MESSAGES: {:#?}", history.clone());
 
-        Ok(CreateChatCompletionRequestArgs::default()
-            .model("gpt-4.1-mini")
-            .messages(history)
-            .stream(true)
-            .build()
-            .context("Failed to build stream")?
-        )
-    }
+    //     Ok(CreateChatCompletionRequestArgs::default()
+    //         .model("gpt-4.1-mini")
+    //         .messages(history)
+    //         .stream(true)
+    //         .build()
+    //         .context("Failed to build stream")?
+    //     )
+    // }
 
     fn inject_system_messages(&self, history: &mut Vec<ChatCompletionRequestMessage>) {
         const SYSTEM_CONTENT: &str = include_str!("prompts/system.txt");

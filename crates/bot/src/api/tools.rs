@@ -36,7 +36,7 @@ pub async fn get_lazer_hair_removal_info(
 
 pub async fn escalate(recipient: Recipient) -> Result<()> {
     let sender = recipient.as_sender();
-    let message = OutgoingMessage::from("😊");
+    let message = OutgoingMessage::from("Минуточку...");
     let body = SendBody::new(recipient, message);
 
     Client::new()
