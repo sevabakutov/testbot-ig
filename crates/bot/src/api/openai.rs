@@ -9,10 +9,7 @@ use serde_json::{json, Value};
 use tokio_stream::StreamExt;
 use crate::*;
 use api::{
-    meta::{
-        escalate, 
-        send_to_ig_by_paragraphs
-    }, 
+    meta::send_to_ig_by_paragraphs, 
     tools::call_fn
 };
 use constants::{DIM_SIZE, OPENAI_PROJECT_ID};
@@ -91,7 +88,8 @@ impl OpenAIClient {
             2,
             ChatCompletionRequestMessage::System(ChatCompletionRequestSystemMessage {
                 content: ChatCompletionRequestSystemMessageContent::from(format!(
-                    "РЕЗЮМЕ ЧАТА:\n{}",
+                    "РЕЗЮМЕ ЧАТА (recipient_id: {}):\n{}",
+                    recipient.id(),
                     get_chat_summary(chat_id)
                 )),
                 name: None,
@@ -114,12 +112,6 @@ impl OpenAIClient {
 
         // режем и отправляем в IG
         send_to_ig_by_paragraphs(recipient.clone(), &final_answer).await?;
-
-        if final_answer.trim() == "😊" {
-            escalate(recipient).await?;
-        } else {
-            memory.push_assistant(chat_id, &final_answer).await;
-        }
 
         Ok(())
     }
@@ -169,9 +161,8 @@ impl OpenAIClient {
                                     "description": "задача — определить язык входного текста и вернуть результат в строгом структурированном формате. Русский → \"ru\"; Украинский → \"ua\"; Польский → \"pl\"; Остальное → \"unknown\""
                                 },
                                 "country": { "type": "string" },
-                                "city": { "type": "string" }
                             },
-                            "required": ["lang", "country", "city"]
+                            "required": ["lang", "country"]
                         }))
                         .build()?,
                 },
@@ -185,21 +176,36 @@ impl OpenAIClient {
                             "properties": {
                                 "lang": {
                                     "type": "string",
-                                    "description": "как выше"
-                                },
-                                "hint": {
-                                    "type": "string",
-                                    "description": "Один из предопределённых вариантов: ... (как в твоём описании)"
+                                    "description": "задача — определить язык входного текста и вернуть результат в строгом структурированном формате. Русский → \"ru\"; Украинский → \"ua\"; Польский → \"pl\"; Остальное → \"unknown\""
                                 }
                             },
-                            "required": ["lang", "hint"]
+                            "required": ["lang"]
                         }))
                         .build()?,
                 },
+                ChatCompletionTool {
+                    r#type: ChatCompletionToolType::Function,
+                    function: FunctionObjectArgs::default()
+                        .name("escalate")
+                        .description("Эскалация чата оператору.")
+                        .parameters(json!({
+                            "type": "object",
+                            "properties": {
+                                "recipient_id": {
+                                    "type": "string",
+                                    "description": "Идентефикация чата"
+                                }
+                            },
+                            "required": ["recipient_id"]
+                        }))
+                        .build()?
+                }
             ])
             .tool_choice("auto")
             .build()
             .context("Failed to build chat request")?;
+
+        println!("REQUEST:\n {:#?}\n", request.clone());
 
         let mut stream = self.client.chat().create_stream(request).await?;
 

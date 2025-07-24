@@ -9,8 +9,7 @@ use crate::{
         OutgoingMessage, 
         Recipient, 
         SendBody
-    }, 
-    utils::mark_escalated
+    }
 };
 
 pub async fn send_to_ig_by_paragraphs(recipient: Recipient, text: &str) -> Result<()> {
@@ -87,26 +86,6 @@ pub async fn send_dm<'a>(recipient: Recipient, message: OutgoingMessage<'a>) -> 
         return Ok(());
     }
     // >>>
-
-    Ok(())
-}
-
-pub async fn escalate(recipient: Recipient) -> Result<()> {
-    let sender = recipient.as_sender();
-    let message = OutgoingMessage::from("😊");
-    let body = SendBody::new(recipient, message);
-
-    Client::new()
-        .post(DM_URL)
-        .query(&[("access_token", ACCESS_TOKEN.as_str())])
-        .json(&body)
-        .send()
-        .await
-        .context("Failed to send DM")?
-        .error_for_status()
-        .context("Failed to get status")?;
-
-    mark_escalated(&sender);
 
     Ok(())
 }
